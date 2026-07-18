@@ -835,7 +835,7 @@ export default function App() {
   const [learned, setLearned] = useState([]);
   const [activeVoice, setActiveVoice] = useState(null);
 
-  const speak = (text) => {
+  const speak = (text) => { console.log("SPEAK:", text, "activeVoice:", activeVoice?.name);
     if (typeof window === "undefined" || !window.speechSynthesis) return;
     const u = new SpeechSynthesisUtterance(text);
     if (activeVoice) {
