@@ -191,15 +191,28 @@ function guessVoiceGender(voiceName) {
 function pickArabicVoice(gender) {
   if (typeof window === "undefined" || !window.speechSynthesis) return null;
   const voices = window.speechSynthesis.getVoices();
+  
+  // D'abord cherche une voix arabe
   const arabic = voices.filter((v) => (v.lang || "").toLowerCase().startsWith("ar"));
-  if (arabic.length === 0) return null;
-
-  // On préfère une voix ar-MA si disponible, sinon n'importe quelle voix arabe.
-  const preferred = arabic.find((v) => v.lang.toLowerCase() === "ar-ma");
-  const pool = preferred ? [preferred, ...arabic.filter((v) => v !== preferred)] : arabic;
-
-  const matched = pool.find((v) => guessVoiceGender(v.name) === gender);
-  return matched || pool[0]; // repli : première voix arabe dispo, genre non garanti
+  if (arabic.length > 0) {
+    const preferred = arabic.find((v) => v.lang.toLowerCase() === "ar-ma");
+    const pool = preferred ? [preferred, ...arabic.filter((v) => v !== preferred)] : arabic;
+    const matched = pool.find((v) => guessVoiceGender(v.name) === gender);
+    if (matched) return matched;
+  }
+  
+  // Fallback : cherche une voix française du bon genre
+  const french = voices.filter((v) => (v.lang || "").toLowerCase().startsWith("fr"));
+  const frenchMatched = french.find((v) => guessVoiceGender(v.name) === gender);
+  if (frenchMatched) return frenchMatched;
+  
+  // Fallback : cherche une voix anglaise du bon genre
+  const english = voices.filter((v) => (v.lang || "").toLowerCase().startsWith("en"));
+  const englishMatched = english.find((v) => guessVoiceGender(v.name) === gender);
+  if (englishMatched) return englishMatched;
+  
+  // Dernier recours : première voix disponible
+  return voices[0] || null;
 }
 
 /* ---------------- API (profils & progression, via Vercel + Neon) ---------------- */
