@@ -178,8 +178,8 @@ const shuffle = (a) => {
 // Indices de genre dans le nom des voix exposées par les navigateurs.
 // Aucune API standard ne donne le genre d'une voix : c'est une estimation
 // au mieux, avec repli propre si rien ne correspond.
-const FEMALE_VOICE_HINTS = ["hoda", "salma", "laila", "leila", "zahra", "amira", "fatima", "yasmin", "hala", "female", "femme", "woman"];
-const MALE_VOICE_HINTS = ["naayf", "nayef", "tarek", "karim", "hamed", "majed", "omar", "male", "homme", "man"];
+const FEMALE_VOICE_HINTS = ["hoda", "salma", "laila", "leila", "zahra", "amira", "fatima", "yasmin", "hala", "samantha", "shelley", "sandy", "moira", "karen", "kathy", "tessa", "flo", "grandma", "female", "femme", "woman"];
+const MALE_VOICE_HINTS = ["naayf", "nayef", "tarek", "karim", "hamed", "majed", "omar", "albert", "daniel", "fred", "ralph", "thomas", "jacques", "grandpa", "reed", "rocko", "male", "homme", "man"];
 
 function guessVoiceGender(voiceName) {
   const n = (voiceName || "").toLowerCase();
