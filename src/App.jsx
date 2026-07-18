@@ -835,20 +835,22 @@ export default function App() {
   const [learned, setLearned] = useState([]);
   const [activeVoice, setActiveVoice] = useState(null);
 
-  const speak = (text) => { console.log("SPEAK:", text, "activeVoice:", activeVoice?.name);
-    if (typeof window === "undefined" || !window.speechSynthesis) return;
-    const u = new SpeechSynthesisUtterance(text);
-    if (activeVoice) {
-      u.voice = activeVoice;
+  const speak = (text) => {
+  if (typeof window === "undefined" || !window.speechSynthesis) return;
+  const u = new SpeechSynthesisUtterance(text);
+  if (activeVoice) {
+    u.voice = activeVoice;
+    // Ne pas forcer la langue si voix non-arabe
+    if (activeVoice.lang.startsWith("ar")) {
       u.lang = activeVoice.lang;
-    } else {
-      u.lang = "ar-MA";
     }
-    u.rate = 0.85;
-    window.speechSynthesis.cancel();
-    window.speechSynthesis.speak(u);
-  };
-
+  } else {
+    u.lang = "ar-MA";
+  }
+  u.rate = 0.85;
+  window.speechSynthesis.cancel();
+  window.speechSynthesis.speak(u);
+};
   const refreshActiveVoice = (gender) => {
     setActiveVoice(pickArabicVoice(gender));
   };
