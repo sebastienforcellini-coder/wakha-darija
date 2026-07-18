@@ -74,7 +74,7 @@ const LESSONS = [
   {
     id: "makla",
     title: "Manger & boire",
-    icon: "◗",
+    icon: "◎",
     words: [
       { d: "Makla", ph: "MAK-la", ar: "ماكلة", fr: "Nourriture" },
       { d: "Ma", ph: "ma", ar: "ما", fr: "Eau" },
@@ -127,7 +127,7 @@ const LESSONS = [
   {
     id: "raqm",
     title: "Les chiffres",
-    icon: "١",
+    icon: "#",
     words: [
       { d: "Wahed", ph: "WA-hed", ar: "واحد", fr: "1" },
       { d: "Jouj", ph: "jouj", ar: "جوج", fr: "2" },
@@ -175,14 +175,95 @@ const shuffle = (a) => {
   return r;
 };
 
+// Voix arabe active (choisie selon le genre du profil) — voir pickArabicVoice / refreshActiveVoice.
+let activeVoice = null;
+
 const speak = (text) => {
   if (typeof window === "undefined" || !window.speechSynthesis) return;
   const u = new SpeechSynthesisUtterance(text);
-  u.lang = "ar-MA";
+  if (activeVoice) {
+    u.voice = activeVoice;
+    u.lang = activeVoice.lang;
+  } else {
+    u.lang = "ar-MA";
+  }
   u.rate = 0.85;
   window.speechSynthesis.cancel();
   window.speechSynthesis.speak(u);
 };
+
+// Indices de genre dans le nom des voix exposées par les navigateurs.
+// Aucune API standard ne donne le genre d'une voix : c'est une estimation
+// au mieux, avec repli propre si rien ne correspond.
+const FEMALE_VOICE_HINTS = ["hoda", "salma", "laila", "leila", "zahra", "amira", "fatima", "yasmin", "hala", "female", "femme", "woman"];
+const MALE_VOICE_HINTS = ["naayf", "nayef", "tarek", "karim", "hamed", "majed", "omar", "male", "homme", "man"];
+
+function guessVoiceGender(voiceName) {
+  const n = (voiceName || "").toLowerCase();
+  if (FEMALE_VOICE_HINTS.some((h) => n.includes(h))) return "f";
+  if (MALE_VOICE_HINTS.some((h) => n.includes(h))) return "m";
+  return null;
+}
+
+function pickArabicVoice(gender) {
+  if (typeof window === "undefined" || !window.speechSynthesis) return null;
+  const voices = window.speechSynthesis.getVoices();
+  const arabic = voices.filter((v) => (v.lang || "").toLowerCase().startsWith("ar"));
+  if (arabic.length === 0) return null;
+
+  // On préfère une voix ar-MA si disponible, sinon n'importe quelle voix arabe.
+  const preferred = arabic.find((v) => v.lang.toLowerCase() === "ar-ma");
+  const pool = preferred ? [preferred, ...arabic.filter((v) => v !== preferred)] : arabic;
+
+  const matched = pool.find((v) => guessVoiceGender(v.name) === gender);
+  return matched || pool[0]; // repli : première voix arabe dispo, genre non garanti
+}
+
+function refreshActiveVoice(gender) {
+  activeVoice = pickArabicVoice(gender);
+}
+
+/* ---------------- API (profils & progression, via Vercel + Neon) ---------------- */
+
+const PROFILE_STORAGE_KEY = "wakha_active_profile_id";
+
+async function apiFetchUsers() {
+  const res = await fetch("/api/users");
+  if (!res.ok) throw new Error("Impossible de charger les profils.");
+  return res.json();
+}
+
+async function apiCreateUser(name, gender) {
+  const res = await fetch("/api/users", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ name, gender }),
+  });
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({}));
+    throw new Error(body.error || "Impossible de créer le profil.");
+  }
+  return res.json();
+}
+
+async function apiFetchProgress(userId) {
+  const res = await fetch(`/api/progress?userId=${encodeURIComponent(userId)}`);
+  if (!res.ok) throw new Error("Impossible de charger la progression.");
+  return res.json();
+}
+
+async function apiSaveProgress(userId, wordKey) {
+  // Best-effort : on ne bloque jamais l'interface sur cet appel.
+  try {
+    await fetch("/api/progress", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ userId, wordKey, status: "known" }),
+    });
+  } catch (err) {
+    console.warn("Sauvegarde de progression échouée (hors-ligne ?)", err);
+  }
+}
 
 /* ---------------- Composants ---------------- */
 
@@ -625,14 +706,189 @@ function TopBar({ onBack, label, right }) {
   );
 }
 
+/* ---------------- Sélection de profil ---------------- */
+
+function ProfileGate({ onSelect }) {
+  const [profiles, setProfiles] = useState(null); // null = chargement
+  const [error, setError] = useState(null);
+  const [creating, setCreating] = useState(false);
+  const [name, setName] = useState("");
+  const [gender, setGender] = useState("f");
+  const [saving, setSaving] = useState(false);
+
+  useEffect(() => {
+    apiFetchUsers()
+      .then(setProfiles)
+      .catch((err) => setError(err.message));
+  }, []);
+
+  const handleCreate = async () => {
+    if (!name.trim() || saving) return;
+    setSaving(true);
+    setError(null);
+    try {
+      const user = await apiCreateUser(name.trim(), gender);
+      onSelect(user);
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <div style={{ textAlign: "center", padding: "40px 0" }}>
+      <div style={{ display: "flex", justifyContent: "center", gap: 6, marginBottom: 14 }}>
+        <Zellige size={22} color={C.clay} opacity={.8} />
+        <Zellige size={22} color={C.mint} />
+        <Zellige size={22} color={C.saffron} opacity={.8} />
+      </div>
+      <h1 style={{ fontFamily: "Georgia, serif", fontWeight: 700, fontSize: 30, margin: "0 0 6px" }}>
+        Qui s'entraîne ?
+      </h1>
+      <p style={{ fontSize: 14, opacity: .6, marginBottom: 28 }}>
+        Choisis ton profil pour retrouver ta progression.
+      </p>
+
+      {error && (
+        <div style={{
+          background: C.clay, color: C.paper, borderRadius: 12, padding: "10px 14px",
+          fontSize: 13, marginBottom: 18,
+        }}>{error}</div>
+      )}
+
+      {profiles === null ? (
+        <div style={{ opacity: .5, fontSize: 14, marginBottom: 24 }}>Chargement des profils…</div>
+      ) : (
+        <div style={{ display: "grid", gap: 10, marginBottom: 24 }}>
+          {profiles.map((p) => (
+            <button
+              key={p.id}
+              onClick={() => onSelect(p)}
+              style={{
+                display: "flex", alignItems: "center", gap: 14, textAlign: "left",
+                padding: "14px 18px", background: C.paper, border: `2px solid ${C.ink}`,
+                borderRadius: 16, boxShadow: `4px 4px 0 ${p.gender === "f" ? C.mint : C.clay}`,
+                cursor: "pointer", fontFamily: "inherit", color: C.ink,
+              }}
+            >
+              <div style={{
+                width: 40, height: 40, borderRadius: "50%",
+                background: p.gender === "f" ? C.mint : C.clay, color: C.paper,
+                display: "grid", placeItems: "center", fontSize: 17, fontWeight: 700, flexShrink: 0,
+                fontFamily: "Georgia, serif",
+              }}>{p.name.trim().charAt(0).toUpperCase()}</div>
+              <div style={{ fontFamily: "Georgia, serif", fontSize: 18, fontWeight: 700 }}>{p.name}</div>
+            </button>
+          ))}
+          {profiles.length === 0 && (
+            <div style={{ opacity: .5, fontSize: 14 }}>Aucun profil pour l'instant — crée le premier ci-dessous.</div>
+          )}
+        </div>
+      )}
+
+      {!creating ? (
+        <Btn variant="ghost" onClick={() => setCreating(true)}>+ Nouveau profil</Btn>
+      ) : (
+        <div style={{
+          display: "grid", gap: 12, textAlign: "left", maxWidth: 320, marginInline: "auto",
+          background: C.paper, border: `2px solid ${C.ink}`, borderRadius: 16, padding: 18,
+          boxShadow: `4px 4px 0 ${C.saffron}`,
+        }}>
+          <div>
+            <label style={{ fontSize: 12, letterSpacing: ".1em", textTransform: "uppercase", opacity: .5 }}>
+              Prénom
+            </label>
+            <input
+              autoFocus
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              onKeyDown={(e) => { if (e.key === "Enter") handleCreate(); }}
+              placeholder="Ex. Léa"
+              maxLength={40}
+              style={{
+                width: "100%", marginTop: 6, padding: "10px 12px", fontSize: 15,
+                border: `2px solid ${C.ink}`, borderRadius: 10, fontFamily: "inherit",
+                boxSizing: "border-box",
+              }}
+            />
+          </div>
+          <div>
+            <label style={{ fontSize: 12, letterSpacing: ".1em", textTransform: "uppercase", opacity: .5 }}>
+              Voix pour l'écoute
+            </label>
+            <div style={{ display: "flex", gap: 8, marginTop: 6 }}>
+              <Chip active={gender === "f"} onClick={() => setGender("f")}>Féminine</Chip>
+              <Chip active={gender === "m"} onClick={() => setGender("m")}>Masculine</Chip>
+            </div>
+          </div>
+          <div style={{ display: "flex", gap: 10 }}>
+            <Btn variant="ghost" onClick={() => setCreating(false)} style={{ flex: 1 }}>Annuler</Btn>
+            <Btn variant="accent" onClick={handleCreate} disabled={!name.trim() || saving} style={{ flex: 1 }}>
+              {saving ? "…" : "Créer"}
+            </Btn>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 /* ---------------- Application ---------------- */
 
 export default function App() {
+  const [profile, setProfile] = useState(null);
+  const [profileReady, setProfileReady] = useState(false);
   const [lesson, setLesson] = useState(null);
   const [mode, setMode] = useState(null);
   const [learned, setLearned] = useState([]);
 
-  const addLearned = (d) => setLearned((l) => (l.includes(d) ? l : [...l, d]));
+  // Retrouve le profil actif mémorisé sur cet appareil au démarrage.
+  useEffect(() => {
+    const storedId = typeof window !== "undefined" ? localStorage.getItem(PROFILE_STORAGE_KEY) : null;
+    if (!storedId) { setProfileReady(true); return; }
+    apiFetchUsers()
+      .then((users) => {
+        const found = users.find((u) => u.id === storedId);
+        if (found) setProfile(found);
+      })
+      .catch(() => {})
+      .finally(() => setProfileReady(true));
+  }, []);
+
+  // Charge la progression du profil actif + choisit la voix (genre) correspondante.
+  useEffect(() => {
+    if (!profile) return;
+    refreshActiveVoice(profile.gender);
+    apiFetchProgress(profile.id)
+      .then((rows) => setLearned(rows.map((r) => r.word_key)))
+      .catch((err) => console.warn("Progression indisponible", err));
+  }, [profile]);
+
+  // Les listes de voix arrivent parfois de façon asynchrone (Chrome notamment).
+  useEffect(() => {
+    if (typeof window === "undefined" || !window.speechSynthesis) return;
+    const handler = () => { if (profile) refreshActiveVoice(profile.gender); };
+    window.speechSynthesis.addEventListener("voiceschanged", handler);
+    return () => window.speechSynthesis.removeEventListener("voiceschanged", handler);
+  }, [profile]);
+
+  const selectProfile = (user) => {
+    setProfile(user);
+    localStorage.setItem(PROFILE_STORAGE_KEY, user.id);
+  };
+
+  const switchProfile = () => {
+    setProfile(null);
+    setLearned([]);
+    setMode(null);
+    localStorage.removeItem(PROFILE_STORAGE_KEY);
+  };
+
+  const addLearned = (d) => {
+    setLearned((l) => (l.includes(d) ? l : [...l, d]));
+    if (profile) apiSaveProgress(profile.id, d);
+  };
 
   const activeWords = lesson ? LESSONS.find((l) => l.id === lesson).words : ALL_WORDS;
 
@@ -647,6 +903,14 @@ export default function App() {
       <div style={{ maxWidth: 520, margin: "0 auto" }}>{children}</div>
     </div>
   );
+
+  if (!profileReady) {
+    return shell(<div style={{ textAlign: "center", padding: "80px 0", opacity: .5 }}>Chargement…</div>);
+  }
+
+  if (!profile) {
+    return shell(<ProfileGate onSelect={selectProfile} />);
+  }
 
   if (mode) {
     const props = { words: activeWords, pool: ALL_WORDS, onBack: back, onLearned: addLearned };
@@ -681,6 +945,22 @@ export default function App() {
         <p style={{ fontSize: 15, opacity: .6, marginTop: 12, maxWidth: 330, marginInline: "auto", lineHeight: 1.5 }}>
           Le marocain qu'on parle vraiment dans la rue, au souk et autour d'un verre de thé.
         </p>
+        <div style={{
+          display: "flex", alignItems: "center", justifyContent: "center", gap: 8,
+          marginTop: 16, fontSize: 13, opacity: .7,
+        }}>
+          <span style={{
+            width: 20, height: 20, borderRadius: "50%", display: "grid", placeItems: "center",
+            background: profile.gender === "f" ? C.mint : C.clay, color: C.paper,
+            fontSize: 11, fontWeight: 700, fontFamily: "Georgia, serif", flexShrink: 0,
+          }}>{profile.name.trim().charAt(0).toUpperCase()}</span>
+          <span>{profile.name}</span>
+          <button onClick={switchProfile} style={{
+            background: "none", border: "none", cursor: "pointer", color: C.clay,
+            fontWeight: 600, fontSize: 13, padding: 0, textDecoration: "underline",
+            fontFamily: "inherit",
+          }}>changer</button>
+        </div>
       </div>
 
       {/* Compteur */}
