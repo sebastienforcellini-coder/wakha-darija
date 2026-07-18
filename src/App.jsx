@@ -308,8 +308,7 @@ function Btn({ children, onClick, variant = "solid", full, disabled, style }) {
 
 /* ---------------- Mode : Cartes ---------------- */
 
-function Flashcards({ words, onBack, onLearned }) {
-  const [deck] = useState(() => shuffle(words));
+function Flashcards({ words, onBack, onLearned, speak }) {  const [deck] = useState(() => shuffle(words));
   const [i, setI] = useState(0);
   const [flip, setFlip] = useState(false);
   const w = deck[i];
@@ -911,7 +910,7 @@ export default function App() {
   }
 
   if (mode) {
-    const props = { words: activeWords, pool: ALL_WORDS, onBack: back, onLearned: addLearned };
+    const props = { words: activeWords, pool: ALL_WORDS, onBack: back, onLearned: addLearned, speak };
     return shell(
       mode === "cards" ? <Flashcards {...props} /> :
       mode === "quiz" ? <Quiz {...props} /> :
