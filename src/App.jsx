@@ -175,23 +175,6 @@ const shuffle = (a) => {
   return r;
 };
 
-// Voix arabe active (choisie selon le genre du profil) — voir pickArabicVoice / refreshActiveVoice.
-let activeVoice = null;
-
-const speak = (text) => {
-  if (typeof window === "undefined" || !window.speechSynthesis) return;
-  const u = new SpeechSynthesisUtterance(text);
-  if (activeVoice) {
-    u.voice = activeVoice;
-    u.lang = activeVoice.lang;
-  } else {
-    u.lang = "ar-MA";
-  }
-  u.rate = 0.85;
-  window.speechSynthesis.cancel();
-  window.speechSynthesis.speak(u);
-};
-
 // Indices de genre dans le nom des voix exposées par les navigateurs.
 // Aucune API standard ne donne le genre d'une voix : c'est une estimation
 // au mieux, avec repli propre si rien ne correspond.
@@ -217,10 +200,6 @@ function pickArabicVoice(gender) {
 
   const matched = pool.find((v) => guessVoiceGender(v.name) === gender);
   return matched || pool[0]; // repli : première voix arabe dispo, genre non garanti
-}
-
-function refreshActiveVoice(gender) {
-  activeVoice = pickArabicVoice(gender);
 }
 
 /* ---------------- API (profils & progression, via Vercel + Neon) ---------------- */
@@ -842,6 +821,25 @@ export default function App() {
   const [lesson, setLesson] = useState(null);
   const [mode, setMode] = useState(null);
   const [learned, setLearned] = useState([]);
+  const [activeVoice, setActiveVoice] = useState(null);
+
+  const speak = (text) => {
+    if (typeof window === "undefined" || !window.speechSynthesis) return;
+    const u = new SpeechSynthesisUtterance(text);
+    if (activeVoice) {
+      u.voice = activeVoice;
+      u.lang = activeVoice.lang;
+    } else {
+      u.lang = "ar-MA";
+    }
+    u.rate = 0.85;
+    window.speechSynthesis.cancel();
+    window.speechSynthesis.speak(u);
+  };
+
+  const refreshActiveVoice = (gender) => {
+    setActiveVoice(pickArabicVoice(gender));
+  };
 
   // Retrouve le profil actif mémorisé sur cet appareil au démarrage.
   useEffect(() => {
@@ -1040,6 +1038,23 @@ export default function App() {
         Le 3 se lit « ع » (ain, guttural), le 7 un « h » soufflé, le « kh » comme la jota espagnole.<br />
         La prononciation audio utilise la voix arabe de ton appareil.
       </p>
+
+      {/* Bouton Changer de profil */}
+      <div style={{ marginTop: 40, marginBottom: 20, textAlign: "center" }}>
+        <button onClick={switchProfile} style={{
+          padding: "12px 20px", background: C.clay, color: C.paper,
+          border: "none", borderRadius: 12, fontSize: 14, fontWeight: 600,
+          cursor: "pointer", fontFamily: "inherit",
+          boxShadow: `3px 3px 0 rgba(27,43,42,.2)`,
+          transition: "all .12s ease",
+        }}
+          onMouseDown={(e) => (e.currentTarget.style.transform = "translate(3px,3px)")}
+          onMouseUp={(e) => (e.currentTarget.style.transform = "none")}
+          onMouseLeave={(e) => (e.currentTarget.style.transform = "none")}
+        >
+          👥 Changer de profil
+        </button>
+      </div>
     </>
   );
 }
