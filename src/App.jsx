@@ -329,7 +329,7 @@ function Flashcards({ words, onBack, onLearned }) {
 
 /* ---------------- Mode : Quiz ---------------- */
 
-function Quiz({ words, pool, onBack, onLearned, speak }) {
+function Quiz({ words, pool, onBack, onLearned }) {
   const questions = useMemo(() => shuffle(words).slice(0, 10), [words]);
   const [i, setI] = useState(0);
   const [picked, setPicked] = useState(null);
@@ -528,7 +528,7 @@ function Matching({ words, onBack, onLearned }) {
 
 /* ---------------- Mode : Écoute ---------------- */
 
-function Listening({ words, pool, onBack, onLearned, speak }) {
+function Listening({ words, pool, onBack, onLearned }) {
   const questions = useMemo(() => shuffle(words).slice(0, 8), [words]);
   const [i, setI] = useState(0);
   const [picked, setPicked] = useState(null);
